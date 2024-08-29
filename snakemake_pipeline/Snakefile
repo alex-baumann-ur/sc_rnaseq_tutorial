@@ -1,0 +1,44 @@
+# run pipeline with the following command, dependent on your system: snakemake --cores 12
+
+import os
+import pandas as pd
+
+raw_path = '/path/to/raw_files/'
+sample_path = '/path/to/fastq_sample_files'
+transcriptome = '/path/to/raw_files/refgenomes/Hsapiens/CellRanger/refdata-gex-GRCh38-2024-A'
+cellranger_path = '/path/to/output_cellranger_files/'
+output_data_done = '/path/to/run_done/run_cellranger_snakemake/data_done/'
+
+sample_sheet = pd.read_csv(raw_path+'sample_sheet.txt')
+
+sample_dict = {caseID:sample_name for caseID, sample_name in zip(sample_sheet['CaseID'], sample_sheet['SampleName'])}
+SAMPLES = list(sample_sheet['SampleName'])
+
+print(SAMPLES)
+print(sample_dict)
+
+rule all:
+    input:
+        expand(output_data_done + '{sample}_done.txt', sample=SAMPLES),
+
+rule RunCellRanger:
+    input:
+        transcriptome = transcriptome,
+        fastqs = sample_path,
+        out_dir = directory(cellranger_path)
+    threads: 28
+    message: '### Run Cell Ranger for sample {wildcards.sample} ###'
+    params: value = lambda wildcards: '%s' % sample_dict[wildcards.sample]
+    output:
+        done_file = output_data_done + '{sample}_done.txt',
+    shell:
+        '''
+        cellranger count --id={wildcards.sample} \
+            --output-dir={input.out_dir}/{wildcards.sample} \
+            --transcriptome={input.transcriptome} \
+            --fastqs={input.fastqs} \
+            --sample={params.value} \
+            --localcores={threads} \
+            --create-bam true;
+        touch {output.done_file}
+        '''
